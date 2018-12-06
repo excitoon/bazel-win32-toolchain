@@ -251,23 +251,16 @@ toolchain {
   compiler_flag: "/DNOMINMAX"
 
   # Platform defines.
-  compiler_flag: "/D_WIN32_WINNT=0x0600"
+  compiler_flag: "/D_WIN32_WINNT=0x0601"
   # Turn off warning messages.
   compiler_flag: "/D_CRT_SECURE_NO_DEPRECATE"
   compiler_flag: "/D_CRT_SECURE_NO_WARNINGS"
-  compiler_flag: "/D_SILENCE_STDEXT_HASH_DEPRECATION_WARNINGS"
 
   # Useful options to have on for compilation.
   # Increase the capacity of object files to 2^32 sections.
   compiler_flag: "/bigobj"
   # Allocate 500MB for precomputed headers.
   compiler_flag: "/Zm500"
-  # Use unsigned char by default.
-  compiler_flag: "/J"
-  # Use function level linking.
-  compiler_flag: "/Gy"
-  # Use string pooling.
-  compiler_flag: "/GF"
   # Catch C++ exceptions only and tell the compiler to assume that functions declared
   # as extern "C" never throw a C++ exception.
   compiler_flag: "/EHsc"
@@ -288,6 +281,42 @@ toolchain {
     name: "no_legacy_features"
   }
 
+  artifact_name_pattern {
+     category_name: 'object_file'
+     prefix: ''
+     extension: '.obj'
+  }
+
+  artifact_name_pattern {
+     category_name: 'static_library'
+     prefix: ''
+     extension: '.lib'
+  }
+
+  artifact_name_pattern {
+     category_name: 'alwayslink_static_library'
+     prefix: ''
+     extension: '.lo.lib'
+  }
+
+  artifact_name_pattern {
+     category_name: 'executable'
+     prefix: ''
+     extension: '.exe'
+  }
+
+  artifact_name_pattern {
+     category_name: 'dynamic_library'
+     prefix: ''
+     extension: '.dll'
+  }
+
+  artifact_name_pattern {
+     category_name: 'interface_library'
+     prefix: ''
+     extension: '.if.lib'
+  }
+
   # Suppress startup banner.
   feature {
     name: "nologo"
@@ -297,7 +326,6 @@ toolchain {
       action: "c++-module-compile"
       action: "c++-module-codegen"
       action: "c++-header-parsing"
-      action: "c++-header-preprocessing"
       action: "assemble"
       action: "preprocess-assemble"
       action: "c++-link-executable"
@@ -336,15 +364,21 @@ toolchain {
     tool {
       tool_path: '%{msvc_ml_path_{architecture}}'
     }
-    flag_set {
-      expand_if_all_available: 'output_object_file'
-      flag_group {
-        flag: '/Fo%{output_object_file}'
-        flag: '/Zi'
-        flag: '/c'
-        flag: '%{source_file}'
-      }
+    implies: 'compiler_input_flags'
+    implies: 'compiler_output_flags'
+    implies: 'nologo'
+    implies: 'msvc_env'
+    implies: 'sysroot'
+  }
+
+  action_config {
+    config_name: 'preprocess-assemble'
+    action_name: 'preprocess-assemble'
+    tool {
+      tool_path: '%{msvc_ml_path_{architecture}}'
     }
+    implies: 'compiler_input_flags'
+    implies: 'compiler_output_flags'
     implies: 'nologo'
     implies: 'msvc_env'
     implies: 'sysroot'
@@ -356,31 +390,8 @@ toolchain {
     tool {
       tool_path: '%{msvc_cl_path_{architecture}}'
     }
-    flag_set {
-      flag_group {
-        flag: '/c'
-        flag: '%{source_file}'
-      }
-    }
-    flag_set {
-      expand_if_all_available: 'output_object_file'
-      flag_group {
-        flag: '/Fo%{output_object_file}'
-      }
-    }
-    flag_set {
-      expand_if_all_available: 'output_assembly_file'
-      flag_group {
-        flag: '/Fa%{output_assembly_file}'
-      }
-    }
-    flag_set {
-      expand_if_all_available: 'output_preprocess_file'
-      flag_group {
-        flag: '/P'
-        flag: '/Fi%{output_preprocess_file}'
-      }
-    }
+    implies: 'compiler_input_flags'
+    implies: 'compiler_output_flags'
     implies: 'legacy_compile_flags'
     implies: 'nologo'
     implies: 'msvc_env'
@@ -396,31 +407,8 @@ toolchain {
     tool {
       tool_path: '%{msvc_cl_path_{architecture}}'
     }
-    flag_set {
-      flag_group {
-        flag: '/c'
-        flag: '%{source_file}'
-      }
-    }
-    flag_set {
-      expand_if_all_available: 'output_object_file'
-      flag_group {
-        flag: '/Fo%{output_object_file}'
-      }
-    }
-    flag_set {
-      expand_if_all_available: 'output_assembly_file'
-      flag_group {
-        flag: '/Fa%{output_assembly_file}'
-      }
-    }
-    flag_set {
-      expand_if_all_available: 'output_preprocess_file'
-      flag_group {
-        flag: '/P'
-        flag: '/Fi%{output_preprocess_file}'
-      }
-    }
+    implies: 'compiler_input_flags'
+    implies: 'compiler_output_flags'
     implies: 'legacy_compile_flags'
     implies: 'nologo'
     implies: 'msvc_env'
@@ -440,11 +428,11 @@ toolchain {
     implies: 'linkstamps'
     implies: 'output_execpath_flags'
     implies: 'input_param_flags'
+    implies: 'user_link_flags'
     implies: 'legacy_link_flags'
     implies: 'linker_subsystem_flag'
     implies: 'linker_param_file'
     implies: 'msvc_env'
-    implies: 'use_linker'
     implies: 'no_stripping'
   }
 
@@ -459,11 +447,11 @@ toolchain {
     implies: 'linkstamps'
     implies: 'output_execpath_flags'
     implies: 'input_param_flags'
+    implies: 'user_link_flags'
     implies: 'legacy_link_flags'
     implies: 'linker_subsystem_flag'
     implies: 'linker_param_file'
     implies: 'msvc_env'
-    implies: 'use_linker'
     implies: 'no_stripping'
     implies: 'has_configured_linker_path'
     implies: 'def_file'
@@ -480,11 +468,11 @@ toolchain {
       implies: 'linkstamps'
       implies: 'output_execpath_flags'
       implies: 'input_param_flags'
+      implies: 'user_link_flags'
       implies: 'legacy_link_flags'
       implies: 'linker_subsystem_flag'
       implies: 'linker_param_file'
       implies: 'msvc_env'
-      implies: 'use_linker'
       implies: 'no_stripping'
       implies: 'has_configured_linker_path'
       implies: 'def_file'
@@ -513,7 +501,6 @@ toolchain {
       action: 'c-compile'
       action: 'c++-compile'
       action: 'c++-header-parsing'
-      action: 'c++-header-preprocessing'
       action: 'c++-module-compile'
       action: 'c++-module-codegen'
       flag_group {
@@ -531,7 +518,6 @@ toolchain {
       action: "c++-module-compile"
       action: "c++-module-codegen"
       action: "c++-header-parsing"
-      action: "c++-header-preprocessing"
       action: "assemble"
       action: "preprocess-assemble"
       action: "c++-link-executable"
@@ -543,14 +529,6 @@ toolchain {
         value: "%{msvc_env_path_{architecture}}"
       }
       env_entry {
-        key: "INCLUDE"
-        value: "%{msvc_env_include_{architecture}}"
-      }
-      env_entry {
-        key: "LIB"
-        value: "%{msvc_env_lib_{architecture}}"
-      }
-      env_entry {
         key: "TMP"
         value: "%{msvc_env_tmp_{architecture}}"
       }
@@ -559,17 +537,37 @@ toolchain {
         value: "%{msvc_env_tmp_{architecture}}"
       }
     }
+    implies: 'msvc_compile_env'
+    implies: 'msvc_link_env'
   }
 
   feature {
-    name: "use_linker"
+    name: "msvc_compile_env"
+    env_set {
+      action: "c-compile"
+      action: "c++-compile"
+      action: "c++-module-compile"
+      action: "c++-module-codegen"
+      action: "c++-header-parsing"
+      action: "assemble"
+      action: "preprocess-assemble"
+      env_entry {
+        key: "INCLUDE"
+        value: "%{msvc_env_include_{architecture}}"
+      }
+    }
+  }
+
+  feature {
+    name: "msvc_link_env"
     env_set {
       action: "c++-link-executable"
       action: "c++-link-dynamic-library"
       action: "c++-link-nodeps-dynamic-library"
+      action: "c++-link-static-library"
       env_entry {
-        key: "USE_LINKER"
-        value: "1"
+        key: "LIB"
+        value: "%{msvc_env_lib_{architecture}}"
       }
     }
   }
@@ -582,7 +580,6 @@ toolchain {
       action: 'c-compile'
       action: 'c++-compile'
       action: 'c++-header-parsing'
-      action: 'c++-header-preprocessing'
       action: 'c++-module-compile'
       flag_group {
         iterate_over: 'quote_include_paths'
@@ -607,7 +604,6 @@ toolchain {
       action: "c-compile"
       action: "c++-compile"
       action: "c++-header-parsing"
-      action: "c++-header-preprocessing"
       action: "c++-module-compile"
       flag_group {
         flag: "/D%{preprocessor_defines}"
@@ -624,7 +620,6 @@ toolchain {
       action: 'c-compile'
       action: 'c++-compile'
       action: 'c++-module-compile'
-      action: 'c++-header-preprocessing'
       action: 'c++-header-parsing'
       flag_group {
         flag: "/showIncludes"
@@ -745,12 +740,7 @@ toolchain {
             value: 'interface_library'
           }
           flag_group {
-            expand_if_false: 'libraries_to_link.is_whole_archive'
             flag: '%{libraries_to_link.name}'
-          }
-          flag_group {
-            expand_if_true: 'libraries_to_link.is_whole_archive'
-            flag: '/WHOLEARCHIVE:%{libraries_to_link.name}'
           }
         }
         flag_group {
@@ -767,41 +757,13 @@ toolchain {
             flag: '/WHOLEARCHIVE:%{libraries_to_link.name}'
           }
         }
-        flag_group {
-          expand_if_equal: {
-            variable: 'libraries_to_link.type'
-            value: 'dynamic_library'
-          }
-          flag_group {
-            expand_if_false: 'libraries_to_link.is_whole_archive'
-            flag: '%{libraries_to_link.name}'
-          }
-          flag_group {
-            expand_if_true: 'libraries_to_link.is_whole_archive'
-            flag: '/WHOLEARCHIVE:%{libraries_to_link.name}'
-          }
-        }
-        flag_group {
-          expand_if_equal: {
-            variable: 'libraries_to_link.type'
-            value: 'versioned_dynamic_library'
-          }
-          flag_group {
-            expand_if_false: 'libraries_to_link.is_whole_archive'
-            flag: '%{libraries_to_link.name}'
-          }
-          flag_group {
-            expand_if_true: 'libraries_to_link.is_whole_archive'
-            flag: '/WHOLEARCHIVE:%{libraries_to_link.name}'
-          }
-        }
       }
     }
   }
 
   # Since this feature is declared earlier in the CROSSTOOL than
-  # "legacy_link_flags", this feature will be applied prior to it anwyhere they
-  # are both implied. And since "legacy_link_flags" contains the linkopts from
+  # "user_link_flags", this feature will be applied prior to it anwyhere they
+  # are both implied. And since "user_link_flags" contains the linkopts from
   # the build rule, this allows the user to override the /SUBSYSTEM in the BUILD
   # file.
   feature {
@@ -816,11 +778,24 @@ toolchain {
     }
   }
 
-  # The "legacy_link_flags" may contain user-defined linkopts (from build rules)
+  # The "user_link_flags" contains user-defined linkopts (from build rules)
   # so it should be defined after features that declare user-overridable flags.
   # For example the "linker_subsystem_flag" defines a default "/SUBSYSTEM" flag
   # but we want to let the user override it, therefore "link_flag_subsystem" is
-  # defined earlier in the CROSSTOOL file than "legacy_link_flags".
+  # defined earlier in the CROSSTOOL file than "user_link_flags".
+  feature {
+    name: 'user_link_flags'
+    flag_set {
+      expand_if_all_available: 'user_link_flags'
+      action: 'c++-link-executable'
+      action: 'c++-link-dynamic-library'
+      action: "c++-link-nodeps-dynamic-library"
+      flag_group {
+        iterate_over: 'user_link_flags'
+        flag: '%{user_link_flags}'
+      }
+    }
+  }
   feature {
     name: 'legacy_link_flags'
     flag_set {
@@ -943,7 +918,6 @@ toolchain {
       flag_group {
         flag: "/Od"
         flag: "/Z7"
-        flag: "/DDEBUG"
       }
     }
     flag_set {
@@ -966,7 +940,6 @@ toolchain {
       flag_group {
         flag: "/Od"
         flag: "/Z7"
-        flag: "/DDEBUG"
       }
     }
     flag_set {
@@ -987,8 +960,109 @@ toolchain {
       action: 'c-compile'
       action: 'c++-compile'
       flag_group {
-        flag: "/O2"
+        flag: "/O2" # Implies /Og /Oi /Ot /Oy /Ob2 /Gs /GF /Gy
+      }
+    }
+    implies: 'frame_pointer'
+  }
+
+  # Keep stack frames for debugging, even in opt mode.
+  # Must come after /O1, /O2 and /Ox.
+  feature {
+    name: "frame_pointer"
+    flag_set {
+      action: "c-compile"
+      action: "c++-compile"
+      flag_group {
+        flag: "/Oy-"
+      }
+    }
+  }
+
+  # Remove assert/DCHECKs in opt mode.
+  # You can have them back with --features=-disable_assertions.
+  feature {
+    name: 'disable_assertions'
+    enabled: true
+    flag_set {
+      action: 'c-compile'
+      action: 'c++-compile'
+      with_feature: {
+        feature: 'opt'
+      }
+      flag_group {
         flag: "/DNDEBUG"
+      }
+    }
+  }
+
+  feature {
+    name: "determinism"
+    enabled: true
+    flag_set {
+      action: "c-compile"
+      action: "c++-compile"
+      flag_group {
+        # Make C++ compilation deterministic. Use linkstamping instead of these
+        # compiler symbols.
+        # TODO: detect clang on Windows and use "-Wno-builtin-macro-redefined"
+        flag: "/wd4117" # Trying to define or undefine a predefined macro
+        flag: '-D__DATE__="redacted"'
+        flag: '-D__TIMESTAMP__="redacted"'
+        flag: '-D__TIME__="redacted"'
+      }
+    }
+  }
+
+  feature {
+    name: 'treat_warnings_as_errors'
+    flag_set {
+      action: 'c-compile'
+      action: 'c++-compile'
+      flag_group {
+        flag: "/WX"
+      }
+    }
+  }
+
+  # Trade slower build time for smaller binary
+  feature {
+    name: 'smaller_binary'
+    enabled: true
+    flag_set {
+      action: 'c-compile'
+      action: 'c++-compile'
+      with_feature: {
+        feature: 'opt'
+      }
+      flag_group {
+        flag: "/Gy" # Enable function-level linking (-ffunction-sections)
+        flag: "/Gw" # Optimize global data (-fdata-sections)
+      }
+    }
+    flag_set {
+      action: 'c++-link-executable'
+      action: 'c++-link-dynamic-library',
+      action: 'c++-link-nodeps-dynamic-library'
+      with_feature: {
+        feature: 'opt'
+      }
+      flag_group {
+        flag: '/OPT:ICF' # Fold identical functions
+        flag: '/OPT:REF' # Eliminate unreferenced functions and data
+      }
+    }
+  }
+
+  # Suppress warnings that most users do not care
+  feature {
+    name: 'ignore_noisy_warnings'
+    enabled: true
+    flag_set {
+      action: 'c++-link-static-library'
+      flag_group {
+        # Suppress 'object file does not define any public symbols' warning
+        flag: '/ignore:4221'
       }
     }
   }
@@ -1001,7 +1075,6 @@ toolchain {
       action: 'c-compile'
       action: 'c++-compile'
       action: 'c++-header-parsing'
-      action: 'c++-header-preprocessing'
       action: 'c++-module-compile'
       action: 'c++-module-codegen'
       flag_group {
@@ -1020,7 +1093,6 @@ toolchain {
       action: 'c-compile'
       action: 'c++-compile'
       action: 'c++-header-parsing'
-      action: 'c++-header-preprocessing'
       action: 'c++-module-compile'
       action: 'c++-module-codegen'
       action: 'c++-link-executable'
@@ -1041,12 +1113,68 @@ toolchain {
       action: 'c-compile'
       action: 'c++-compile'
       action: 'c++-header-parsing'
-      action: 'c++-header-preprocessing'
       action: 'c++-module-compile'
       action: 'c++-module-codegen'
       flag_group {
         iterate_over: 'unfiltered_compile_flags'
         flag: '%{unfiltered_compile_flags}'
+      }
+    }
+  }
+
+  feature {
+    name: 'compiler_output_flags'
+    flag_set {
+      action: 'assemble'
+      flag_group {
+        expand_if_all_available: 'output_file'
+        expand_if_none_available: 'output_assembly_file'
+        expand_if_none_available: 'output_preprocess_file'
+        flag: '/Fo%{output_file}'
+        flag: '/Zi'
+      }
+    }
+    flag_set {
+      action: 'preprocess-assemble'
+      action: 'c-compile'
+      action: 'c++-compile'
+      action: 'c++-header-parsing'
+      action: 'c++-module-compile'
+      action: 'c++-module-codegen'
+      flag_group {
+        expand_if_all_available: 'output_file'
+        expand_if_none_available: 'output_assembly_file'
+        expand_if_none_available: 'output_preprocess_file'
+        flag: '/Fo%{output_file}'
+      }
+      flag_group {
+        expand_if_all_available: 'output_file'
+        expand_if_all_available: 'output_assembly_file'
+        flag: '/Fa%{output_file}'
+      }
+      flag_group {
+        expand_if_all_available: 'output_file'
+        expand_if_all_available: 'output_preprocess_file'
+        flag: '/P'
+        flag: '/Fi%{output_file}'
+      }
+    }
+  }
+
+  feature {
+    name: 'compiler_input_flags'
+    flag_set {
+      action: 'assemble'
+      action: 'preprocess-assemble'
+      action: 'c-compile'
+      action: 'c++-compile'
+      action: 'c++-header-parsing'
+      action: 'c++-module-compile'
+      action: 'c++-module-codegen'
+      flag_group {
+        expand_if_all_available: 'source_file'
+        flag: '/c'
+        flag: '%{source_file}'
       }
     }
   }
@@ -1077,9 +1205,6 @@ toolchain {
   }
 
   linking_mode_flags { mode: DYNAMIC }
-
-%{compilation_mode_content_{architecture}}
-
 }
 """.replace('{architecture}', architecture)
 

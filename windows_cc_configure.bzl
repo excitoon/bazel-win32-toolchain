@@ -32,6 +32,10 @@ load(
     "configure_windows_crosstool_template"
 )
 
+def _auto_configure_warning_maybe(repository_ctx, msg):
+    """Output warning message when CC_CONFIGURE_DEBUG is enabled."""
+    if is_cc_configure_debug(repository_ctx):
+        auto_configure_warning(msg)
 
 def _get_escaped_windows_msys_crosstool_content(repository_ctx, use_mingw = False):
   """Return the content of msys crosstool which is still the default CROSSTOOL on Windows."""
@@ -112,60 +116,87 @@ def _add_system_root(repository_ctx, env):
   return env
 
 def find_vc_path(repository_ctx):
-  """Find Visual C++ build tools install path. Doesn't %-escape the result."""
-  # 1. Check if BAZEL_VC or BAZEL_VS is already set by user.
-  if "BAZEL_VC" in repository_ctx.os.environ:
-    return repository_ctx.os.environ["BAZEL_VC"]
+    """Find Visual C++ build tools install path. Doesn't %-escape the result."""
 
-  if "BAZEL_VS" in repository_ctx.os.environ:
-    return repository_ctx.os.environ["BAZEL_VS"] + "\\VC\\"
-  auto_configure_warning("'BAZEL_VC' is not set, " +
-                         "start looking for the latest Visual C++ installed.")
+    # 1. Check if BAZEL_VC or BAZEL_VS is already set by user.
+    if "BAZEL_VC" in repository_ctx.os.environ:
+        return repository_ctx.os.environ["BAZEL_VC"]
 
-  # 2. Check if VS%VS_VERSION%COMNTOOLS is set, if true then try to find and use
-  # vcvarsqueryregistry.bat to detect VC++.
-  auto_configure_warning("Looking for VS%VERSION%COMNTOOLS environment variables, " +
-                         "eg. VS140COMNTOOLS")
-  for vscommontools_env in ["VS140COMNTOOLS", "VS120COMNTOOLS",
-                            "VS110COMNTOOLS", "VS100COMNTOOLS", "VS90COMNTOOLS"]:
-    if vscommontools_env not in repository_ctx.os.environ:
-      continue
-    vcvarsqueryregistry = repository_ctx.os.environ[vscommontools_env] + "\\vcvarsqueryregistry.bat"
-    if not repository_ctx.path(vcvarsqueryregistry).exists:
-      continue
-    repository_ctx.file("get_vc_dir.bat",
-                        "@echo off\n" +
-                        "call \"" + vcvarsqueryregistry + "\"\n" +
-                        "echo %VCINSTALLDIR%", True)
-    env = _add_system_root(repository_ctx, repository_ctx.os.environ)
-    vc_dir = execute(repository_ctx, ["./get_vc_dir.bat"], environment=env)
+    if "BAZEL_VS" in repository_ctx.os.environ:
+        return repository_ctx.os.environ["BAZEL_VS"] + "\\VC\\"
+    _auto_configure_warning_maybe(repository_ctx, "'BAZEL_VC' is not set, " +
+                                                  "start looking for the latest Visual C++ installed.")
 
-    auto_configure_warning("Visual C++ build tools found at %s" % vc_dir)
+    # 2. Check if VS%VS_VERSION%COMNTOOLS is set, if true then try to find and use
+    # vcvarsqueryregistry.bat to detect VC++.
+    _auto_configure_warning_maybe(repository_ctx, "Looking for VS%VERSION%COMNTOOLS environment variables, " +
+                                                  "eg. VS140COMNTOOLS")
+    for vscommontools_env in [
+        "VS140COMNTOOLS",
+        "VS120COMNTOOLS",
+        "VS110COMNTOOLS",
+        "VS100COMNTOOLS",
+        "VS90COMNTOOLS",
+    ]:
+        if vscommontools_env not in repository_ctx.os.environ:
+            continue
+        vcvarsqueryregistry = repository_ctx.os.environ[vscommontools_env] + "\\vcvarsqueryregistry.bat"
+        if not repository_ctx.path(vcvarsqueryregistry).exists:
+            continue
+        repository_ctx.file(
+            "get_vc_dir.bat",
+            "@echo off\n" +
+            "call \"" + vcvarsqueryregistry + "\"\n" +
+            "echo %VCINSTALLDIR%",
+            True,
+        )
+        env = _add_system_root(repository_ctx, repository_ctx.os.environ)
+        vc_dir = execute(repository_ctx, ["./get_vc_dir.bat"], environment = env)
+
+        _auto_configure_warning_maybe(repository_ctx, "Visual C++ build tools found at %s" % vc_dir)
+        return vc_dir
+
+    # 3. User might clean up all environment variables, if so looking for Visual C++ through registry.
+    # Works for all VS versions, including Visual Studio 2017.
+    _auto_configure_warning_maybe(repository_ctx, "Looking for Visual C++ through registry")
+    reg_binary = _get_system_root(repository_ctx) + "\\system32\\reg.exe"
+    vc_dir = None
+    for key, suffix in (("VC7", ""), ("VS7", "\\VC")):
+        for version in ["15.0", "14.0", "12.0", "11.0", "10.0", "9.0", "8.0"]:
+            if vc_dir:
+                break
+            result = repository_ctx.execute([reg_binary, "query", "HKEY_LOCAL_MACHINE\\SOFTWARE\\Wow6432Node\\Microsoft\\VisualStudio\\SxS\\" + key, "/v", version])
+            _auto_configure_warning_maybe(repository_ctx, "registry query result for VC %s:\n\nSTDOUT(start)\n%s\nSTDOUT(end)\nSTDERR(start):\n%s\nSTDERR(end)\n" %
+                                                          (version, result.stdout, result.stderr))
+            if not result.stderr:
+                for line in result.stdout.split("\n"):
+                    line = line.strip()
+                    if line.startswith(version) and line.find("REG_SZ") != -1:
+                        vc_dir = line[line.find("REG_SZ") + len("REG_SZ"):].strip() + suffix
+    if vc_dir:
+        _auto_configure_warning_maybe(repository_ctx, "Visual C++ build tools found at %s" % vc_dir)
+        return vc_dir
+
+    # 4. Check default directories for VC installation
+    _auto_configure_warning_maybe(repository_ctx, "Looking for default Visual C++ installation directory")
+    program_files_dir = get_env_var(repository_ctx, "PROGRAMFILES(X86)", default = "C:\\Program Files (x86)", enable_warning = True)
+    for path in [
+        "Microsoft Visual Studio\\2017\\BuildTools\\VC",
+        "Microsoft Visual Studio\\2017\\Community\\VC",
+        "Microsoft Visual Studio\\2017\\Professional\\VC",
+        "Microsoft Visual Studio\\2017\\Enterprise\\VC",
+        "Microsoft Visual Studio 14.0\\VC",
+    ]:
+        path = program_files_dir + "\\" + path
+        if repository_ctx.path(path).exists:
+            vc_dir = path
+            break
+
+    if not vc_dir:
+        _auto_configure_warning_maybe(repository_ctx, "Visual C++ build tools not found.")
+        return None
+    _auto_configure_warning_maybe(repository_ctx, "Visual C++ build tools found at %s" % vc_dir)
     return vc_dir
-
-  # 3. User might clean up all environment variables, if so looking for Visual C++ through registry.
-  # Works for all VS versions, including Visual Studio 2017.
-  auto_configure_warning("Looking for Visual C++ through registry")
-  reg_binary = _get_system_root(repository_ctx) + "\\system32\\reg.exe"
-  vc_dir = None
-  for key, suffix in (("VC7", ""), ("VS7", "\\VC")):
-    for version in ["15.0", "14.0", "12.0", "11.0", "10.0", "9.0", "8.0"]:
-      if vc_dir:
-        break
-      result = repository_ctx.execute([reg_binary, "query", "HKEY_LOCAL_MACHINE\\SOFTWARE\\Wow6432Node\\Microsoft\\VisualStudio\\SxS\\" + key, "/v", version])
-      if is_cc_configure_debug(repository_ctx):
-        auto_configure_warning("registry query result for VC %s:\n\nSTDOUT(start)\n%s\nSTDOUT(end)\nSTDERR(start):\n%s\nSTDERR(end)\n" %
-                               (version, result.stdout, result.stderr))
-      if not result.stderr:
-        for line in result.stdout.split("\n"):
-          line = line.strip()
-          if line.startswith(version) and line.find("REG_SZ") != -1:
-            vc_dir = line[line.find("REG_SZ") + len("REG_SZ"):].strip() + suffix
-
-  if not vc_dir:
-    return None
-  auto_configure_warning("Visual C++ build tools found at %s" % vc_dir)
-  return vc_dir
 
 def _is_vs_2017(vc_path):
   """Check if the installed VS version is Visual Studio 2017."""
@@ -340,7 +371,8 @@ def _get_toolchain_options(repository_ctx, vc_path, architecture, toolchain_name
         "%{compilation_mode_content}": "",
         "%{link_content}": "",
         "%{msvc_link_target}" : "/MACHINE:X64" if architecture == "x64_windows" else "/MACHINE:X86",
-        "%{cxx_builtin_include_directory}": ""
+        "%{cxx_builtin_include_directory}": "",
+        "%{coverage}": ""
     }, architecture)
 
   env = setup_vc_env_vars(repository_ctx, vc_path, architecture)
@@ -403,10 +435,10 @@ def _get_toolchain_options(repository_ctx, vc_path, architecture, toolchain_name
       "%{msvc_lib_path}": msvc_lib_path,
       "%{dbg_mode_debug}": "/DEBUG:FULL" if support_debug_fastlink else "/DEBUG",
       "%{fastbuild_mode_debug}": "/DEBUG:FASTLINK" if support_debug_fastlink else "/DEBUG",
-      "%{compilation_mode_content}": compilation_mode_content,
-      "%{link_content}": "",
+      "%{content}": _get_escaped_windows_msys_crosstool_content(repository_ctx),
       "%{msvc_link_target}" : "/MACHINE:X64" if architecture == "x64_windows" else "/MACHINE:X86",
-      "%{cxx_builtin_include_directory}": "\n".join(escaped_cxx_include_directories)
+      "%{cxx_builtin_include_directory}": "\n".join(escaped_cxx_include_directories),
+      "%{coverage}": ""
   }, architecture)
 
 def configure_windows_toolchain(repository_ctx):
