@@ -223,7 +223,7 @@ def setup_vc_env_vars(repository_ctx, vc_path, architecture):
   vcvarsall = _find_vcvarsall_bat_script(repository_ctx, vc_path)
   if not vcvarsall:
     return None
-  argument = "x64" if architecture == "x64_windows" else "x64_x86" # Cross-compiler.
+  argument = "x64" if architecture == "x64_windows" else "amd64_x86" # Cross-compiler.
   repository_ctx.file("get_env.bat",
                       "@echo off\n" +
                       "call \"" + vcvarsall + "\" " + argument + " > NUL \n" +
