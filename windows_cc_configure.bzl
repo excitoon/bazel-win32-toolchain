@@ -252,7 +252,7 @@ def find_msvc_tool(repository_ctx, vc_path, architecture, tool):
       return None
     # Normally there should be only one child directory under %VC_PATH%\TOOLS\MSVC,
     # but iterate every directory to be more robust.
-    subfolder = "HostX64\\x64\\" if architecture == "x64_windows" else "HostX86\\x86\\"
+    subfolder = "HostX64\\x64\\" if architecture == "x64_windows" else "HostX64\\x86\\"
     for path in dirs:
       tool_path = str(path) + "\\bin\\" + subfolder + tool
       if repository_ctx.path(tool_path).exists:
@@ -260,7 +260,7 @@ def find_msvc_tool(repository_ctx, vc_path, architecture, tool):
   else:
     # For VS 2015 and older version, the tools are under:
     # C:\Program Files (x86)\Microsoft Visual Studio 14.0\VC\bin{,\amd64}
-    subfolder = "amd64\\" if architecture == "x64_windows" else ""
+    subfolder = "amd64\\" if architecture == "x64_windows" else "amd64_x86\\"
     tool_path = vc_path + "\\bin\\" + subfolder + tool
 
   if not repository_ctx.path(tool_path).exists:
